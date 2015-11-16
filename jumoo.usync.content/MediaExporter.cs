@@ -95,7 +95,7 @@ namespace jumoo.usync.content
 
             var nodeName = FileHelper.CleanFileName(item.ContentType.Alias);
 
-            XElement xml = uSyncXmlHelper.ExportContentBase(nodeName, item, false); 
+            XElement xml = uSyncXmlHelper.ExportContentBase(nodeName, item, true); 
 
             xml.Add(new XAttribute("parentGUID", item.Level > 1 ? item.Parent().Key : new Guid("00000000-0000-0000-0000-000000000000")));
             xml.Add(new XAttribute("mediaTypeAlias", item.ContentType.Alias));

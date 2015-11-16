@@ -16,7 +16,8 @@ using System.IO;
 using System.Xml;
 using System.Xml.Linq;
 
-using System.Diagnostics; 
+using System.Diagnostics;
+using System.Text.RegularExpressions; 
 
 namespace jumoo.usync.content
 {
@@ -143,7 +144,7 @@ namespace jumoo.usync.content
                     media.ParentId = parentId;
 
                 // load all the properties 
-                /*
+                
                 var properties = from property in element.Elements()
                                  where property.Attribute("isDoc") == null
                                  select property;
@@ -157,10 +158,9 @@ namespace jumoo.usync.content
                     {
                         // right if we are trying to be clever and map ids 
                         // then mapIds will be set
-                        media.SetValue(propertyTypeAlias, GetImportInnerXML(property));
+                        media.SetValue(propertyTypeAlias, UpdateMatchingIds(GetImportInnerXML(property)));
                     }
                 }
-                */
 
                 FileHelper.ImportMediaFile(mediaGuid, media);               
                 
@@ -178,6 +178,43 @@ namespace jumoo.usync.content
             return media; 
         }
 
+        /// <summary>
+        ///  takes the content, uses the IdMap to search and replace
+        ///  and id's it finds in the code.
+        /// </summary>
+        /// <param name="content">piece of content to check</param>
+        /// <returns>updated content with new id values</returns>
+        private string UpdateMatchingIds(string content)
+        {
+            LogHelper.Debug<ContentImporter>("Original [{0}]", () => content);
+
+            Dictionary<string, string> replacements = new Dictionary<string, string>();
+
+            string guidRegEx = @"\b[A-F0-9]{8}(?:-[A-F0-9]{4}){3}-[A-F0-9]{12}\b";
+
+            // look for things that might be Guids...
+            foreach (Match m in Regex.Matches(content, guidRegEx))
+            {
+                int id = GetIdFromGuid(Guid.Parse(m.Value));
+
+                if ((id != -1) && (!replacements.ContainsKey(m.Value)))
+                {
+                    replacements.Add(m.Value, id.ToString());
+                }
+            }
+
+            // now loop through our replacements and add them
+
+            foreach (KeyValuePair<string, string> pair in replacements)
+            {
+                LogHelper.Debug<MediaImporter>("Updating Id's {0} > {1}", () => pair.Key, () => pair.Value);
+                content = content.Replace(pair.Key, pair.Value);
+            }
+
+            LogHelper.Debug(typeof(MediaImporter), String.Format("Updated [{0}]", content));
+            return content;
+        }
+
         private string GetImportInnerXML(XElement parent)
         {
             var reader = parent.CreateReader();
@@ -190,7 +227,26 @@ namespace jumoo.usync.content
             {
                 return parent.Value;
             }
-            return xml;
+            else
+            {
+                // if it's not CDATA we should fix the &amp; issue
+                return xml.Replace("&amp;", "&");
+            }
+
+            // return xml;
+        }
+
+        private int GetIdFromGuid(Guid guid)
+        {
+            Guid sourceGuid = helpers.ImportPairs.GetTargetGuid(guid);
+
+            LogHelper.Debug<MediaImporter>("Getting Source Guid [{0}] == [{1}]", () => guid, () => sourceGuid);
+
+            IMedia m = _mediaService.GetById(sourceGuid);
+            if (m != null)
+                return m.Id;
+            else
+                return -1;
         }
     }
 }
